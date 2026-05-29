@@ -25,7 +25,9 @@ the backbone knowledge graph. The input of the entity linking process is the unl
 concepts from an ontology. The process stores the determined annotations as edges in the underlying KG.
 Currently, we utilize an LLM to determine the annotations for each mention and the corresponding semantic type.
 In the future, we aim to support larger ontologies. Therefore, we realize a 
-blocking step to reduce the set of concept candidates.
+blocking step or indexing to reduce the set of concept candidates.
+
+![extraction_workflow.png](extraction_workflow.png)
 
 ### GraphRAG Search
 
@@ -36,4 +38,14 @@ using context information with LLMs are the following:
 knowledge graph. The retrieval methods are located at ```search.retrieval``` package. Currently, we have implemented
 a simple node retrieval method identifying the Top5 nodes for a query based on the precalculated text-embeddings.
 We further plan the following retrieval methods:
-   - 
+   - **Multi-Hop Retrieval** As starting point, we determine the entity mentions in a query. The identified mentions are
+   used to determine the Top1 similar nodes for each mention. We use the identified nodes to determine a mulit-hop graph
+   for each node. The subgraphs are then merged to a unified context graph.
+   - **Subgraph-Matching Retrieval** Similar to Multi-Hop Retrieval, we extract the mentions from the query. Additionally, 
+we identify potential relationships among the mentions and use them to build the subgraph related to the query.
+The subgraph is then used to identify the relevant subgraphs from the patient graph. 
+2. **Context generation** The retrieved graph is transformed to a JSON representation. In the current version, we do not use 
+any confidence scores to rank the context information.
+3. The original query and the generated context are used to query an LLM. The task of the LLM is to generate a free text
+answer and to provide evidence represented by original text chunks.
+
