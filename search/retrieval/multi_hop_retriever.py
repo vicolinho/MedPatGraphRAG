@@ -35,7 +35,6 @@ class MultiHopNodeRetriever(Retriever):
         result = []
         for m in mentions:
             result.extend(self.vector_search(m.term, index_name, node_label, embedding_property, top_k, threshold, embedder))
-            print("Search with: {}".format(m))
         graph_result_list = []
         for n in result:
             with self.neo4j_driver.session() as session:

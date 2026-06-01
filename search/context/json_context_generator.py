@@ -15,7 +15,6 @@ class JSONContextGenerator(ContextGenerator):
             copied_graph = g.copy()
             for n, d in copied_graph.nodes(data=True):
                 props = set(d.keys())
-                print(props)
                 props.difference_update(node_properties)
                 for p  in props:
                     d.pop(p, None)  # Remove unwanted attribute
@@ -26,5 +25,4 @@ class JSONContextGenerator(ContextGenerator):
                     d.pop(p, None)  # Remove unwanted attribute
             json_data = json_graph.node_link_data(copied_graph)
             context_list.append(json_data)
-            print(json_data)
         return context_list
