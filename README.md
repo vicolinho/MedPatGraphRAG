@@ -49,3 +49,43 @@ any confidence scores to rank the context information.
 3. The original query and the generated context are used to query an LLM. The task of the LLM is to generate a free text
 answer and to provide evidence represented by original text chunks.
 
+
+## Setup
+
+1. Install the virtual environment:
+    ```bash
+    uv sync
+    ```
+
+2. Create a `.env` file containing all needed environment variables.
+    For reference, check out [the example file](./.env_dummy).
+
+    Hint: Manually set environment variables take precedence over those set in the `.env` file.
+
+3. If you do not have a running Neo4j instance, you can launch one using
+
+    ```bash
+   
+    docker compose -f ./neo4j_iPA/docker-compose.yml up
+    ```
+### KG Construction commands
+
+- Import the semantic network as backbone ontology. The `NEO4J_URI`, `NEO4J_USER` and `NEO4J_PASSWORD` have to
+be defined in the `.env` file
+```bash
+   uv run ./src/ipagraphrag/main/backend_graph/ontology_import_main.py --srdef_path ./data/sn_current/2023AA/SRDEF --srstre1_path ./data/sn_current/2023AA/SRSTRE1
+```
+
+- Extract entity mentions from a patient document using an LLM specified in `.env` by `LLM_MODEL`. We utilize
+an API located at `LLM_STUB_URL`.
+```bash
+   
+    uv run ./src/ipagraphrag/main/extraction/llm_extraction_main.py -i ./data/graSSCo
+   ```
+
+- Generate embeddings for each node based on the textual properties using a pretrained
+language model specified in the `.env` file for the property `LM_MODEL`
+```bash
+   
+    uv run ./src/ipagraphrag/main/embedding_generator/embedding_generator_main.py
+   ```

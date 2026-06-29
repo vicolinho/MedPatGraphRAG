@@ -2,3 +2,4 @@
 /data/
 /.venv/
 /.env
+/neo4j_iPA/neo4j/
