@@ -91,14 +91,14 @@ def main() -> None:
             result_list = []
             for query_text in f:
                 query_text = query_text.split(",")
-                extractor = LLMExtractor(os.getenv('LLM_STUB_URL'),os.getenv('API_KEY'), LLM_MODEL)
+                extractor = LLMExtractor(os.getenv('BASE_URL'),os.getenv('API_KEY'), LLM_MODEL)
                 results = retriever.retrieve_subgraphs(query_text, index_name=VECTOR_INDEX_NAME,
                                         node_label=NODE_LABEL, patient_name=patient, embedding_property=EMBEDDING_PROPERTY, top_k=TOP_K, hops=1,
                                                        threshold=SIMILARITY_THRESHOLD, provider=EMBEDDING_PROVIDER,
                                                       extractor=extractor)
                 generator = JSONContextGenerator()
                 context_list = generator.generate_context(results, {'text', 'name', 'definition', 'key'}, {'key'})
-                expander = QueryExpander(os.getenv('LLM_STUB_URL'),os.getenv('API_KEY'), LLM_MODEL)
+                expander = QueryExpander(os.getenv('BASE_URL'),os.getenv('API_KEY'), LLM_MODEL)
 
                 for context in context_list:
                    json_result = expander.expand_query(query_text, context)

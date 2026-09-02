@@ -38,15 +38,17 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description='rl generation')
 
-    parser.add_argument('--vector_index', '-vi', type=str, default='vector', help='vector index name')
+    parser.add_argument('--vector_index', '-vi', type=str, default='mention_vector', help='vector index name')
     parser.add_argument('--node_label', '-nl', type=str, default='mention',
                         help='nodel label for querying')
     parser.add_argument('--embedding_property', '-ep', type=str, default='embedding',
                         help='embedding property')
     parser.add_argument('--sim_threshold', '-t', type=float, default=0.5,
                         help='similarity threshold for node embedding and query mention embedding')
-    parser.add_argument('--top_k', '-top_k', type=int, default=5,
+    parser.add_argument('--top_k', '-top_k', type=int, default=2,
                         help='top k for query mention and node embedding similarity ranking')
+    parser.add_argument('--concept_label', '-cl', type=str, default='Concept',
+                        help='patient to analyse')
     parser.add_argument('--patient', '-p', type=str, default='Albers',
                         help='patient to analyse')
     args = parser.parse_args()
@@ -74,11 +76,13 @@ def main() -> None:
     # Search parameters
     TOP_K = args.top_k  # number of results
     SIMILARITY_THRESHOLD = args.sim_threshold
-
+    CONCEPT_LABEL = args.concept_label
 
     EMBEDDING_PROVIDER = os.getenv("provider", "huggingface")
-    LLM_MODEL = os.getenv("LLM_MODEL", "qwen3-vl-235b-a22b-instruct-fp8")
-
+    LLM_MODEL = os.getenv("LLM_MODEL", None)
+    if LLM_MODEL is None:
+        print("LLM model is not specified")
+        exit(1)
     PATIENT_NAME = args.patient
     """Interactive entry point – prompts the user for a search query."""
 
@@ -96,14 +100,17 @@ def main() -> None:
             print("[ERROR] Query cannot be empty.")
             sys.exit(1)
     query_text = query_text.split(",")
-    extractor = LLMExtractor(os.getenv('LLM_STUB_URL'),os.getenv('API_KEY'), LLM_MODEL)
-    results = retriever.retrieve_subgraphs(query_text, patient_name=PATIENT_NAME, index_name=VECTOR_INDEX_NAME,
-                            node_label=NODE_LABEL, embedding_property=EMBEDDING_PROPERTY, top_k=TOP_K, hops=1,
+    extractor = LLMExtractor(os.getenv('BASE_URL'),os.getenv('API_KEY'), LLM_MODEL)
+    searched_label_index = {"mention": "mention_vector", "Concept": "concept_vector"}
+    results = retriever.retrieve_subgraphs(query_text, patient_name=PATIENT_NAME,
+                                           searched_label_index=searched_label_index,
+                                           embedding_property=EMBEDDING_PROPERTY, top_k=TOP_K, hops=2,
+                                           concept_label=CONCEPT_LABEL,
                                            threshold=SIMILARITY_THRESHOLD, provider=EMBEDDING_PROVIDER,
                                           extractor=extractor)
     generator = JSONContextGenerator()
-    context_list = generator.generate_context(results, {'text', 'name', 'definition', 'key'}, {'key'})
-    expander = QueryExpander(os.getenv('LLM_STUB_URL'),os.getenv('API_KEY'), LLM_MODEL)
+    context_list = generator.generate_context(results, {'text', 'name', 'definition', 'key', 'FSN', 'term'}, {'key'})
+    expander = QueryExpander(os.getenv('BASE_URL'),os.getenv('API_KEY'), LLM_MODEL)
     for context in context_list:
        expander.expand_query(query_text, context)
 

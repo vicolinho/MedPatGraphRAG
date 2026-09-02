@@ -18,25 +18,19 @@ except ImportError:
     NEO4J_AVAILABLE = False
 
 
-def load_scispacy_model():
-    nlp = spacy.load("en_core_sci_lg")
-    nlp.add_pipe("scispacy_linker", config={"resolve_abbreviations": True, "linker_name": "umls"})
-    return nlp
+# def find_unlinked_mentions(driver):
+#     query = """MATCH (m:mention)-[]-(c:chunk)
+#             WHERE NOT (m)-[]-(:SemanticType)
+#             RETURN m.mention_id as mention_id, m.text AS term, m.type AS mention_type, c.text AS chunk"""
+#     mention_dict = {}
+#     records, summary, keys = driver.execute_query(query)
+#     for record in records:
+#         mention_dict[record['mention_id']] = {"text": record['term'], "mention_type": record['mention_type'],
+#                                               "chunk": record['chunk']}
+#     return mention_dict
 
-
-def find_unlinked_mentions(driver):
-    query = """MATCH (m:mention)-[]-(c:chunk)
-            WHERE NOT (m)-[]-(:SemanticType)
-            RETURN m.mention_id as mention_id, m.text AS term, m.type AS mention_type, c.text AS chunk"""
-    mention_dict = {}
-    records, summary, keys = driver.execute_query(query)
-    for record in records:
-        mention_dict[record['mention_id']] = {"text": record['term'], "mention_type": record['mention_type'],
-                                              "chunk": record['chunk']}
-    return mention_dict
-
-def get_semantic_type(driver):
-    query = """MATCH(sty: SemanticType) 
+def get_semantic_type(driver, ontology_name):
+    query = f"""MATCH(sty: {ontology_name}) 
     RETURN sty.name AS name, sty.definition AS definition"""
     semantic_type_list = []
     records, summary, keys = driver.execute_query(query)

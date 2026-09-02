@@ -14,12 +14,10 @@ class MultiHopNodeRetriever(Retriever):
 
     def retrieve_subgraphs(self, query:str|list[str], **kwargs) -> list[networkx.Graph]:
         embedder = self.get_embedding_model(kwargs["provider"])
-
-        node_label = kwargs.get("node_label","")
-        index_name = kwargs.get("index_name","")
+        searched_label_index = kwargs.get("searched_label_index", {"":""})
         embedding_property = kwargs.get("embedding_property", "embedding")
-        patient_name = kwargs.get("patient_name", None)
-
+        patient_name = kwargs.get("patient_name", "")
+        concept_label = kwargs.get("concept_label")
 
         extractor = kwargs.get("extractor")
         mentions:list[Mention] = extractor.extract_from_text(query[0], prompt=prompt.EXTRACT_MENTIONS_CONCEPT)
@@ -30,22 +28,45 @@ class MultiHopNodeRetriever(Retriever):
         threshold = kwargs.get("threshold", 0)
         result = []
         for m in mentions:
-            result.extend(self.vector_search(m.term, patient_name, index_name, node_label, embedding_property, top_k, threshold, embedder))
+            result.extend(self.vector_search(m.term, patient_name, searched_label_index, embedding_property, top_k, threshold, embedder))
         graph_result_list = []
         for n in result:
+            print("node id {} label {}".format(n["node"]["id"], n["node"]["labels"]))
+            if "term" in n["node"]:
+                print(n["node"]["term"])
+            print(n["score"])
             with self.neo4j_driver.session() as session:
+                # query = f'''
+                #     MATCH p = (start) - [x] - {{1,{hops} }}(end)
+                #     WHERE
+                #     NONE(i IN range(0, size(nodes(p)) - 2)
+                #         WHERE
+                #         '{concept_label}'
+                #         IN
+                #         labels(nodes(p)[i])
+                #         AND
+                #         '{concept_label}'
+                #         IN
+                #         labels(nodes(p)[i + 1]))
+                #     AND
+                #     NONE(i IN range(0, size(nodes(p))-1)
+                #         WHERE
+                #         ('mention' IN labels(nodes(p)[i]) AND nodes(p)[i]['source']<>'{patient_name}')
+                #         OR
+                #         ('chunk' IN labels(nodes(p)[i]) AND nodes(p)[i]['source']<>'{patient_name}')
+                #         )
+                #     AND
+                #     elementId(start) = '{n['node']['id']}'
+                #     RETURN
+                #     p'''
                 query = f'''
                     MATCH p = (start) - [x] - {{1,{hops} }}(end)
                     WHERE
-                    NONE(i IN range(0, size(nodes(p)) - 2)
+                    ANY (i IN range(0, size(nodes(p)) - 1)
                         WHERE
-                        'SemanticType'
+                        'mention'
                         IN
-                        labels(nodes(p)[i])
-                        AND
-                        'SemanticType'
-                        IN
-                        labels(nodes(p)[i + 1])) 
+                        labels(nodes(p)[i]))
                     AND
                     NONE(i IN range(0, size(nodes(p))-1)
                         WHERE

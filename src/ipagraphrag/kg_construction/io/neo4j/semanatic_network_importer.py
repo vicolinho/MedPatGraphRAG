@@ -174,7 +174,7 @@ def import_sty_nodes(driver, sty_nodes: list) -> None:
     """
     cypher = """
     UNWIND $batch AS row
-    MERGE (n:SemanticType {ui: row.ui, name: row.name, 
+    MERGE (n:SemanticType:Concept {ui: row.ui, name: row.name, 
     definition: row.definition, abbreviation:row.abbreviation})
     """
     total = 0

@@ -47,18 +47,16 @@ class SimpleNodeRetriever(Retriever):
 
     def retrieve_subgraphs(self, query:str|list[str], **kwargs) -> networkx.Graph:
         embedder = self.get_embedding_model(kwargs["provider"])
-
-        node_label = kwargs.get("node_label","")
-        index_name = kwargs.get("index_name","vector")
+        searched_label_index =  kwargs.get("searched_label_index",{"":""})
         embedding_property = kwargs.get("embedding_property", "embedding")
         top_k = kwargs.get("top_k", 5)
         threshold = kwargs.get("threshold", 0.5)
         result = []
         if type(query) == list:
             for q in query:
-                result.extend(self.vector_search(q, index_name, node_label, embedding_property, top_k, threshold, embedder))
+                result.extend(self.vector_search(q, searched_label_index, embedding_property, top_k, threshold, embedder))
         else:
-            result = self.vector_search(query, index_name, node_label, embedding_property, top_k, threshold, embedder)
+            result = self.vector_search(query, searched_label_index, embedding_property, top_k, threshold, embedder)
         # graph = nx.DiGraph()
         # for n in result:
         #     graph.add_node()

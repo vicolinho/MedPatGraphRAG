@@ -57,8 +57,7 @@ class Retriever(object):
     def vector_search(self,
             query_text: str,
             data_source: str,
-            index_name: str,
-            node_label: str,
+            searched_label_index: dict[str,str],
             embedding_property: str,
             top_k: int,
             threshold: float,
@@ -111,31 +110,32 @@ class Retriever(object):
 
         try:
             with self.neo4j_driver.session() as session:
-                # Choose approach based on index availability
-                use_index = self.check_vector_index_exists(session, index_name)
+                for node_label, index_name in searched_label_index.items():
+                    # Choose approach based on index availability
+                    use_index = self.check_vector_index_exists(session, index_name)
 
-                if use_index:
-                    print(
-                        f"[INFO] Vector index '{index_name}' found → "
-                        "using PRIMARY approach (db.index.vector.queryNodes)."
-                    )
-                    results = self.search_with_vector_index(
-                        session, index_name, embedding, top_k
-                    )
-                else:
-                    print(
-                        f"[WARN] Vector index '{index_name}' NOT found → "
-                        "using FALLBACK approach (vector.similarity.cosine)."
-                    )
-                    results = self.search_with_cosine_similarity(
-                        session,
-                        node_label,
-                        embedding_property,
-                        embedding,
-                        threshold,
-                        top_k,
-                        data_source
-                    )
+                    if use_index:
+                        print(
+                            f"[INFO] Vector index '{index_name}' found → "
+                            "using PRIMARY approach (db.index.vector.queryNodes)."
+                        )
+                        results.extend(self.search_with_vector_index(
+                            session, index_name, embedding, top_k
+                        ))
+                    else:
+                        print(
+                            f"[WARN] Vector index '{index_name}' NOT found → "
+                            "using FALLBACK approach (vector.similarity.cosine)."
+                        )
+                        results.extend(self.search_with_cosine_similarity(
+                            session,
+                            node_label,
+                            embedding_property,
+                            embedding,
+                            threshold,
+                            top_k,
+                            data_source
+                        ))
         except Exception as exc:
             print(f"[ERROR] Neo4j query failed: {exc}")
             raise
@@ -188,7 +188,7 @@ class Retriever(object):
         cypher = """
             CALL db.index.vector.queryNodes($index, $k, $embedding)
             YIELD node, score
-            RETURN node, elementId(node) as id, score
+            RETURN node, elementId(node) as id, labels(node) as labels, score
             ORDER BY score DESC
         """
         params = {"index": index_name, "k": top_k, "embedding": embedding}
@@ -197,6 +197,7 @@ class Retriever(object):
         for record in session.run(cypher, **params):
             props = dict(record["node"])
             props['id'] = record["id"]
+            props['labels'] = record["labels"]
             results.append({
                 "node": props,  # convert Node to plain dict
                 "score": record["score"],
@@ -250,11 +251,11 @@ class Retriever(object):
             WHERE n.{embedding_property} IS NOT NULL
             WITH n, vector.similarity.cosine(n.{embedding_property}, $embedding) AS score
             WHERE score > $threshold AND 
-               ('semantic type' IN LABELS(n) 
+               ('Concept' IN LABELS(n) 
                OR ('chunk' IN LABELS(n) AND n.source='{data_source}')
                OR ('mention' IN LABELS(n) AND n.source='{data_source}')
                )
-            RETURN n as node, elementId(n) as id, score
+            RETURN n as node, elementId(n) as id, labels(n) as labels, score
             ORDER BY score DESC
             LIMIT $limit
         """
@@ -268,6 +269,7 @@ class Retriever(object):
         for record in session.run(cypher, **params):
             props = dict(record["node"])
             props['id'] = record["id"]
+            props['labels'] = record["labels"]
             results.append({
                 "node": props,  # convert Node to plain dict
                 "score": record["score"],

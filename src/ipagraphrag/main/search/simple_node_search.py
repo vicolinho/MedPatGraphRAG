@@ -74,8 +74,9 @@ def main() -> None:
             print("[ERROR] Query cannot be empty.")
             sys.exit(1)
     query_text = query_text.split(",")
-    results = retriever.retrieve_subgraphs(query_text, index_name=VECTOR_INDEX_NAME,
-                            node_label=NODE_LABEL, embedding_property=EMBEDDING_PROPERTY,
+    searched_label_index = {NODE_LABEL: ""}
+    results = retriever.retrieve_subgraphs(query_text, searched_label_index=searched_label_index,
+                             embedding_property=EMBEDDING_PROPERTY,
                                            top_k=TOP_K, threshold=SIMILARITY_THRESHOLD,
                                            provider=EMBEDDING_PROVIDER)
     print_results(results)
