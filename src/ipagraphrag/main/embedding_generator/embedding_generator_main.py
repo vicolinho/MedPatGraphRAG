@@ -36,11 +36,29 @@ def main():
             "index_name": "chunk_vector"
         },
         {
-            "node_label": "SemanticType",
-            "text_node_properties": ["name", "definition"],
+            "node_label": "Concept",
+            "text_node_properties": ["name", "definition", "term", "FSN"],
             "embedding_node_property": "embedding",
-            "index_name": "semantictype_vector"
+            "index_name": "concept_vector"
         }
+        # {
+        #     "node_label": "SemanticType",
+        #     "text_node_properties": ["name", "definition"],
+        #     "embedding_node_property": "embedding",
+        #     "index_name": "semantictype_vector"
+        # },
+        # {
+        #     "node_label": "ConceptDescription",
+        #     "text_node_properties": ["term"],
+        #     "embedding_node_property": "embedding",
+        #     "index_name": "concept_description_vector"
+        # },
+        # {
+        #     "node_label": "ObjectConcept",
+        #     "text_node_properties": ["FSN"],
+        #     "embedding_node_property": "embedding",
+        #     "index_name": "concept_object_vector"
+        # }
     ]
 
     # --- Process each node label ---

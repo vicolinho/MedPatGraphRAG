@@ -27,8 +27,9 @@ def llm_query(api_url, api_key, prompt, model):
         # "stop_sequences": ["\n"]  # Optional: sequences where generation should stop
         "response_format" : {"type": "json_object"}
     }
+    print(api_url)
     response = requests.post(
-        api_url,  # f-string for host
+        api_url+"/chat/completions",  # f-string for host
         headers=headers,
         data=json.dumps(payload),  # Use ollama_model
         stream=True,

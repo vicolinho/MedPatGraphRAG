@@ -16,7 +16,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Extract entities for a specified patient document or document from a directory")
     parser.add_argument("--input", "-i", default='data/graSSCo/Albers.txt', help="Path to patient file or directory")
     args = parser.parse_args()
-    extractor = LLMExtractor(os.getenv("LLM_STUB_URL"), os.getenv("API_KEY"), model=os.getenv("LLM_MODEL"))
+    extractor = LLMExtractor(os.getenv("BASE_URL"), os.getenv("API_KEY"), model=os.getenv("LLM_MODEL"))
     mentions, chunk_list = extractor.extract(args.input, prompt=prompt.EXTRACT_MENTIONS)
     neo4j_uri = os.environ.get("NEO4J_URI")
     neo4j_user = os.environ.get("NEO4J_USERNAME")

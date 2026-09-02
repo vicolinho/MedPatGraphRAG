@@ -124,6 +124,7 @@ class LLMExtractor(Extractor):
     def extract_from_text(self, text, **kwargs) -> list[Mention]:
         chunk_mentions = []
         prompt = kwargs['prompt'] + ": {}".format(text)
+        print()
         response = llm_agent.llm_query(self.api_url, self.api_key, prompt, self.model)
         data = json.loads(response.text)
         logger.debug(data['choices'][0]['message']['content'])

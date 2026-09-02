@@ -45,7 +45,8 @@ def process_label(
     node_label,
     text_node_properties,
     embedding_node_property,
-    index_name
+    index_name,
+    delete_old_embeddings = False
 ):
     """
     Generates and stores embeddings for all nodes of a given label in Neo4j.
@@ -54,13 +55,16 @@ def process_label(
     try:
         driver = GraphDatabase.driver(url, auth=(username, password))
         query = f"DROP INDEX {index_name} IF EXISTS"
+
         embedding_null_query = f"""
             MATCH (n:{node_label})
             SET n.{embedding_node_property} = null"""
+
         with driver.session() as session:
             try:
                 session.run(query)
-                session.run(embedding_null_query)
+                if delete_old_embeddings:
+                    session.run(embedding_null_query)
             except Exception as e:
                 print(f"Error dropping index '{index_name}': {e}")
             finally:
