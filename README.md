@@ -89,3 +89,10 @@ language model specified in the `.env` file for the property `LM_MODEL`
    
     uv run ./src/ipagraphrag/main/embedding_generator/embedding_generator_main.py
    ```
+
+- Link unlinked mentions with concepts from a specified ontology
+- 
+```bash
+   
+    uv run ./src/ipagraphrag/main/linking/semantic_type_linker_main.py
+   ```

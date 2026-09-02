@@ -1,0 +1,112 @@
+// -----------------------------------------------------------------------------------------
+// Module:  snomed_g_graphdb_create.cypher
+// Author: Jay Pedersen, University of Nebraska, August 2015
+// Concept: Update a SNOMED_G Graph Database from input CSV files which describe the changes
+//          to concepts, descriptions, ISA relationships and defining relationships.
+// Input Files:
+//          concept_new.csv
+//          descrip_new.csv
+//          isa_rel_new.csv
+//          defining_rel_new.csv
+
+// NEXT STEP -- create INDEXES
+
+CREATE CONSTRAINT FOR (c:ObjectConcept) REQUIRE c.id IS UNIQUE;
+CREATE CONSTRAINT FOR (c:ObjectConcept) REQUIRE c.sctid IS UNIQUE;
+  // id,sctid index created, requiring uniqueness
+  // Note: Can't have "FSN is UNIQUE"" constraint, can have dups (inactive concepts)
+  //       for example -- "retired procedure" is FSN of multiple inactive concepts
+CREATE CONSTRAINT FOR (c:ConceptDescription) REQUIRE c.id IS UNIQUE;
+CREATE INDEX FOR (x:ConceptDescription) ON (x.sctid);
+  // need index so setting HAS_DESCRIPTION edges doesn't stall
+  // there can be more than one description for the same sctid, sctid not unique, but id is unique
+
+// ROLE_GROUP nodes.  Index needed for defining relationship assignment.
+CREATE INDEX FOR (x:RoleGroup) ON (x.sctid);
+
+// NEXT STEP -- create CONCEPT nodes
+
+RETURN 'Creating NEW ObjectConcept nodes';
+<FILE><<<output_dir>>>concept_new.csv
+
+CREATE (n:ObjectConcept:Concept
+        { nodetype:           'concept',
+          id:                 $id,
+          sctid:              $id,
+          active:             $active,
+          effectiveTime:      $effectiveTime,
+          moduleId:           $moduleId,
+          definitionStatusId: $definitionStatusId,
+          FSN:                $FSN,
+          history:            $history} );
+
+
+// NEXT STEP -- create DESCRIPTION nodes (info from Language+ConceptDescription file)
+RETURN 'Creating NEW ConceptDescription nodes';
+<FILE><<<output_dir>>>descrip_new.csv
+    CREATE (n:ConceptDescription:Concept
+        { nodetype:'description',
+          id: $id,
+          sctid: $sctid,
+          active: $active,
+          typeId: $typeId,
+          moduleId: $moduleId,
+          descriptionType: $descriptionType,
+          id128bit: $id128bit,
+          term: $term,
+          effectiveTime: $effectiveTime,
+          acceptabilityId: $acceptabilityId,
+          refsetId: $refsetId,
+          caseSignificanceId: $caseSignificanceId,
+          languageCode: $languageCode,
+          history: $history} );
+
+
+
+// NEXT STEP - create DESCRIPTION edges
+RETURN 'Creating HAS_DESCRIPTION edges for new ConceptDescription nodes related to ObjectConcept nodes';
+<FILE><<<output_dir>>>descrip_new.csv
+MATCH (c:ObjectConcept { sctid: $sctid }), (f:ConceptDescription { id: $id })
+    MERGE (c)-[:HAS_DESCRIPTION]->(f);
+
+
+// --------------------------------------------------------------------------------------
+// NEXT STEP -- create ISA relationships
+// --------------------------------------------------------------------------------------
+
+RETURN 'Creating NEW ISA edges';
+<FILE><<<output_dir>>>isa_rel_new.csv
+    MATCH (c1:ObjectConcept { id: $sourceId }), (c2:ObjectConcept { id: $destinationId })
+    MERGE (c1)-[:ISA { id: $id,
+                           active: $active,
+                           effectiveTime: $effectiveTime,
+                           moduleId: $moduleId,
+                           relationshipGroup: $relationshipGroup,
+                           typeId: $typeId,
+                           characteristicTypeId: $characteristicTypeId,
+                           sourceId: $sourceId,
+                           destinationId: $destinationId,
+                           history: $history  }]->(c2);
+
+// --------------------------------------------------------------------------------------
+// NEXT STEP -- create RoleGroup nodes
+// --------------------------------------------------------------------------------------
+RETURN 'Creating RoleGroup nodes';
+<FILE><<<output_dir>>>rolegroups.csv
+    MERGE (rg:RoleGroup
+        { nodetype:'rolegroup',
+          sctid: $sctid,
+          rolegroup: $rolegroup});
+
+// Add edge in 2nd step, Java memory issue
+RETURN 'Creating HAS_ROLE_GROUP edges';
+<FILE><<<output_dir>>>rolegroups.csv
+
+    MATCH (c:ObjectConcept { sctid: $sctid }), (rg:RoleGroup { sctid: $sctid, rolegroup: $rolegroup })
+    MERGE (c)-[:HAS_ROLE_GROUP]->(rg);
+
+
+// --------------------------------------------------------------------------------------
+// NEXT STEP -- create Defining relationships
+// --------------------------------------------------------------------------------------
+
