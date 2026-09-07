@@ -4,6 +4,8 @@ import sys
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
 
+from search.retrieval import util
+
 sys.path.append(os.getcwd())
 
 from ipagraphrag.search.retrieval.simple_node_retriever import SimpleNodeRetriever
@@ -75,10 +77,11 @@ def main() -> None:
             sys.exit(1)
     query_text = query_text.split(",")
     searched_label_index = {NODE_LABEL: ""}
+    embedder = util.get_embedding_model(EMBEDDING_PROVIDER)
     results = retriever.retrieve_subgraphs(query_text, searched_label_index=searched_label_index,
                              embedding_property=EMBEDDING_PROPERTY,
                                            top_k=TOP_K, threshold=SIMILARITY_THRESHOLD,
-                                           provider=EMBEDDING_PROVIDER)
+                                           embedder=embedder)
     print_results(results)
 
 

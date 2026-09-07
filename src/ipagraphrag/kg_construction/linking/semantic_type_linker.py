@@ -18,17 +18,6 @@ except ImportError:
     NEO4J_AVAILABLE = False
 
 
-# def find_unlinked_mentions(driver):
-#     query = """MATCH (m:mention)-[]-(c:chunk)
-#             WHERE NOT (m)-[]-(:SemanticType)
-#             RETURN m.mention_id as mention_id, m.text AS term, m.type AS mention_type, c.text AS chunk"""
-#     mention_dict = {}
-#     records, summary, keys = driver.execute_query(query)
-#     for record in records:
-#         mention_dict[record['mention_id']] = {"text": record['term'], "mention_type": record['mention_type'],
-#                                               "chunk": record['chunk']}
-#     return mention_dict
-
 def get_semantic_type(driver, ontology_name):
     query = f"""MATCH(sty: {ontology_name}) 
     RETURN sty.name AS name, sty.definition AS definition"""
@@ -56,11 +45,12 @@ def save_links(driver, links):
     neo4j_importer = Neo4jImport(driver)
     edge_queries = []
     for mention_id, sem_type in links:
-        edge_query = (f"MATCH (a {{mention_id: '{mention_id}'}}), "
+        edge_query = (f"MATCH (a {{id: '{mention_id}'}}), "
                       f"(b:SemanticType {{name: '{sem_type}'}}) "
                       f"MERGE (a)-[r:annotated_with]->(b)")
         edge_queries.append(edge_query)
-    neo4j_importer.execute_queries(driver, edge_queries)
+    with driver.session() as session:
+        neo4j_importer.execute_queries(session, edge_queries)
 
 
 
