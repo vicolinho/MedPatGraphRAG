@@ -1,3 +1,5 @@
+from lib2to3.pgen2 import driver
+
 from ipagraphrag.kg_construction.data.chunk import Chunk
 from ipagraphrag.kg_construction.data.mention import Mention
 from dotenv import load_dotenv
@@ -23,7 +25,8 @@ class Neo4jImport:
             chunk = chunks[i]
             edges_queries.extend(query.create_chunk_edge_queries(previous_chunk, chunk))
         node_queries.extend(edges_queries)
-        self.execute_queries(self.driver, node_queries)
+        with self.driver.session() as session:
+            self.execute_queries(session, node_queries)
 
     def import_onology(self, ontology):
         pass
@@ -31,7 +34,6 @@ class Neo4jImport:
     def import_mention_entity(self, entity_links: dict[Mention, str]):
         pass
 
-    def execute_queries(self, driver, queries):
-        with driver.session() as session:
-            for query in queries:
-                session.run(query)
+    def execute_queries(self, session, queries):
+        for query in queries:
+            session.run(query)
