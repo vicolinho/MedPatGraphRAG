@@ -29,7 +29,7 @@ load_dotenv()
 # Deliberately not env-overridable: MODEL is also the key the extraction JSON is
 # written under and that build_graph.py reads back, so a per-run override would
 # desync the two and produce an empty graph rather than an error.
-MODEL = 'vllm-nvidia-llama-3-3-70b-instruct-fp8'#os.getenv("LLM_MODEL")
+MODEL = os.getenv("LLM_MODEL")
 
 # Greedy decoding everywhere -- extraction and evaluation both need runs to be
 # reproducible, not creative.
