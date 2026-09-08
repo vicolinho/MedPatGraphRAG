@@ -5,7 +5,7 @@ import sys
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
 sys.path.append(os.getcwd())
-from ipagraphrag.kg_construction.linking.semantic_type_linker import uzNEO4J_AVAILABLE, get_semantic_type, \
+from ipagraphrag.kg_construction.linking.semantic_type_linker import NEO4J_AVAILABLE, get_semantic_type, \
     link_mentions, save_links
 from ipagraphrag.kg_construction.linking import util
 
