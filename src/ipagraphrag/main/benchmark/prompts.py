@@ -22,19 +22,29 @@ SYSTEM_PREFIX = (
 # retreats to it whenever evidence is thin, which inflates it at the cost of
 # yes/no recall. Identical in all three modes so it never explains a difference
 # between them.
+#_MAYBE_RULE = (
+#    "Don't default to 'maybe', but use it when there is equally "
+#    "convincing evidence for 'no' and 'yes', or a general lack of "
+#    "evidence for either."
+#)
+
 _MAYBE_RULE = (
-    "Don't default to 'maybe', but use it when there is equally "
+    "Use 'maybe' when there is equally "
     "convincing evidence for 'no' and 'yes', or a general lack of "
     "evidence for either."
 )
-
 # All three grant the fallback to the model's own knowledge: without it the
 # graph modes are penalised for the retrieval misses rather than measured on
 # the facts they do supply.
 MODE_INSTRUCTIONS = {
-    "graph": ("Base your answer on the provided knowledge-graph facts. If the "
-              "provided facts are not enough to answer the question, use your "
-              "biomedical knowledge. Facts with a source sentence reflect the "
+    #"graph": ("Base your answer on the provided knowledge-graph represented as JSON object and the basic context. If the "
+    #          "provided facts and the basic context are not enough to answer the question, use your "
+    #          "biomedical knowledge. Facts with a source sentence reflect the "
+    #          "study's own stated result - treat them as reliable evidence. "
+    #          + _MAYBE_RULE),
+    "graph": ("Base your answer on the provided knowledge-graph represented as JSON object and the basic context. "
+              "You can use the facts, the context information and your biomedical knowledge for reasoning."
+              " Facts with a source sentence reflect the "
               "study's own stated result - treat them as reliable evidence. "
               + _MAYBE_RULE),
     "textrag": ("Base your answer on the retrieved abstracts below. If the "
