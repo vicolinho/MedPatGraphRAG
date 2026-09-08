@@ -26,13 +26,12 @@ from ipagraphrag.common.llm_config import (
     MODEL, EXTRACTION_MODEL_PARAMS, connection_kwargs,
 )
 from ipagraphrag.common.sampling import SEED, sample_pmids
-import prompt
-from config import (
+from ipagraphrag.kg_construction.extraction.llm.config import (
      CREATE_LEXICAL_GRAPH,GRAPH_SCHEMA,
     WORKERS, MAX_NODES_PER_ABSTRACT, MAX_RETRIES, RETRY_BACKOFF,
     DEFAULT_DATA_FILE, OUTPUT_FILE_TEMPLATE, OUTPUT_FILE_ALL,
 )
-
+from ipagraphrag.kg_construction.extraction.llm import prompt
 
 # Windows: SelectorEventLoop avoids "Event loop is closed" on async-client
 # cleanup (httpx inside OpenAILLM).
@@ -80,7 +79,7 @@ def to_record(graph, pmid, abstract, latency):
     valid = {n.id for n in graph.nodes if name_of(n)}
     nodes = [{"id": n.id, "text": n.properties['name'], "type": [n.label, "mention"], "data_source": pmid}
              for n in graph.nodes if n.id in valid]
-    nodes.append({"id":pmid, "type": "abstract", "text": abstract, "data_source": pmid})#
+    nodes.append({"id":pmid, "type": ["abstract", "chunk"], "text": abstract, "data_source": pmid})#
     for n_id in valid:
         triples.append({"source": pmid, "type": "has_mention", "target": n_id
                     })
