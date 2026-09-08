@@ -15,20 +15,16 @@ def main():
                                                  "optionally Neo4j).")
     parser.add_argument("--ontology", "-ont", default='SemanticType', help="ontology name for linking")
     load_dotenv()
-
     args = parser.parse_args()
-
-    # Load scispaCy model and linker
     neo4j_uri = os.environ.get("NEO4J_URI")
     neo4j_user = os.environ.get("NEO4J_USERNAME")
     neo4j_password = os.environ.get("NEO4J_PASSWORD")
-    # Optional: Neo4j enrichment
     neo4j_driver = None
     if neo4j_uri and neo4j_user and neo4j_password and NEO4J_AVAILABLE:
         print("Connecting to Neo4j for semantic type enrichment...")
         neo4j_driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
     # Process the chunk
-    unlinked_mentions = util.find_unlinked_mentions(neo4j_driver, args.ontology)
+    unlinked_mentions = util.find_unlinked_mentions(neo4j_driver, args.ontology, ["chunk"])
     print("unlinked: {}".format(len(unlinked_mentions)))
     if len(unlinked_mentions)> 0:
         semantic_types = get_semantic_type(neo4j_driver, args.ontology)

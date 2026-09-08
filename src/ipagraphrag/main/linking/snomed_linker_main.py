@@ -30,7 +30,7 @@ def main():
         neo4j_driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
     # Process the chunk
     # TODO better selection of unlinked mentions harmonize schema
-    unlinked_mentions = util.find_unlinked_mentions_pub_med(neo4j_driver, args.ontology)
+    unlinked_mentions = util.find_unlinked_mentions(neo4j_driver, args.ontology, ["chunk","abstract"])
     if os.path.exists("links.tmp"):
         with open("links.tmp", "rb") as f:
             links = pickle.load(f)
