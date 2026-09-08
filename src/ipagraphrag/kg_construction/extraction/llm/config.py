@@ -23,7 +23,8 @@ from neo4j_graphrag.experimental.pipeline import Pipeline
 
 from ipagraphrag.common import paths
 from ipagraphrag.common.relations import EXTRACTION_RELATIONS
-import prompt
+
+from ipagraphrag.kg_construction.extraction.llm import prompt
 
 # Read before the getenv call below, so EXTRACT_WORKERS can be set in .env
 # alongside the credentials. Idempotent, never overrides an already-set variable.

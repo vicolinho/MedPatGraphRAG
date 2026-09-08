@@ -16,8 +16,8 @@ import os
 
 from dotenv import load_dotenv
 
-from medgraphrag.common import paths
-from medgraphrag.phase2_normalization.config import TYPE_AGREE_FLOOR
+from ipagraphrag.common import paths
+
 
 # Read before the getenv calls below, so a knob set in .env takes effect no
 # matter which module imports this config first. Idempotent, and it never
@@ -35,7 +35,6 @@ GRAPH_FILE = os.getenv("GRAPH_FILE", paths.GRAPH_ISA)
 HOPS = int(os.getenv("RETRIEVE_HOPS", "2"))
 
 K = 30            # UMLS candidates per question mention
-FLOOR = TYPE_AGREE_FLOOR   # keep the score bar in sync with ingest
 
 # String fallback, used when no candidate CUI is a node in the graph. A
 # high-degree raw-string node is a generic catch-all ("survival", "patients")

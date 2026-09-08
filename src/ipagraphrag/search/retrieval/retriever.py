@@ -1,3 +1,4 @@
+import logging
 import sys
 
 import networkx
@@ -7,28 +8,14 @@ from langchain_openai import OpenAIEmbeddings
 from neo4j import Driver
 import os
 
+from pyparsing import results
+
+logger = logging.getLogger(__name__)
+
 class Retriever(object):
 
     def __init__(self, neo4j_driver:Driver):
         self.neo4j_driver = neo4j_driver
-
-    def get_embedding_model(self, provider="openai"):
-        """
-        Returns an embedding model instance based on the provider.
-        """
-        if provider == "openai":
-            # You can customize the model name as needed
-            return OpenAIEmbeddings(model="text-embedding-3-large")
-        elif provider == "huggingface":
-            # You can customize the model name as needed
-            return HuggingFaceEmbeddings(
-                model_name=f"{os.getenv('LM_MODEL')}",#paraphrase-multilingual-MiniLM-L12-v2, all-mpnet-base-v2"
-                model_kwargs={"device": "cpu"},  # Change to "cuda" for GPU
-                encode_kwargs={"normalize_embeddings": False}
-            )
-        else:
-            print(f"Unknown embedding provider: {provider}", file=sys.stderr)
-            sys.exit(1)
 
     def generate_embedding(self, query_text: str, embedder) -> list[float]:
         """
@@ -48,10 +35,10 @@ class Retriever(object):
         """
         try:
             embedding = embedder.embed_query(query_text)
-            print(f"[INFO] Embedding generated – dimensions: {len(embedding)}")
+            logger.debug(f"Embedding generated – dimensions: {len(embedding)}")
             return embedding
         except Exception as exc:
-            print(f"[ERROR] Failed to generate embedding: {exc}")
+            logger.error(f"Failed to generate embedding: {exc}")
             raise
 
     def vector_search(self,
@@ -115,16 +102,16 @@ class Retriever(object):
                     use_index = self.check_vector_index_exists(session, index_name)
 
                     if use_index:
-                        print(
-                            f"[INFO] Vector index '{index_name}' found → "
+                        logger.debug(
+                            f"Vector index '{index_name}' found → "
                             "using PRIMARY approach (db.index.vector.queryNodes)."
                         )
                         results.extend(self.search_with_vector_index(
                             session, index_name, embedding, top_k
                         ))
                     else:
-                        print(
-                            f"[WARN] Vector index '{index_name}' NOT found → "
+                        logger.warning(
+                            f"Vector index '{index_name}' NOT found → "
                             "using FALLBACK approach (vector.similarity.cosine)."
                         )
                         results.extend(self.search_with_cosine_similarity(
@@ -137,9 +124,24 @@ class Retriever(object):
                             data_source
                         ))
         except Exception as exc:
-            print(f"[ERROR] Neo4j query failed: {exc}")
+            logger.error(f"Neo4j query failed: {exc}")
             raise
         return results
+
+    def get_basic_context(self, element_id):
+        results = []
+        with self.neo4j_driver.session() as session:
+            query = (f"MATCH (n) WHERE n.id='{element_id}'"
+                     f" RETURN n as node")
+
+            for record in session.run(query):
+                props = dict(record["node"])
+                results.append(props)
+                break
+        if len(results) == 0:
+            return ""
+        return str(results[0])
+
 
     def check_vector_index_exists(self, session, index_name: str) -> bool:
         """
@@ -158,7 +160,7 @@ class Retriever(object):
             return record["cnt"] > 0 if record else False
         except Exception as exc:
             # If SHOW INDEXES fails (very old Neo4j), assume no index
-            print(f"[WARN] Could not check for vector index: {exc}. Using fallback.")
+            logger.warning(f"Could not check for vector index: {exc}. Using fallback.")
             return False
 
     def search_with_vector_index(self,

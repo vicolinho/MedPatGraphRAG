@@ -46,7 +46,7 @@ class SimpleNodeRetriever(Retriever):
         super().__init__(neo4j_driver)
 
     def retrieve_subgraphs(self, query:str|list[str], **kwargs) -> networkx.Graph:
-        embedder = self.get_embedding_model(kwargs["provider"])
+        embedder = kwargs["embedder"]
         searched_label_index =  kwargs.get("searched_label_index",{"":""})
         embedding_property = kwargs.get("embedding_property", "embedding")
         top_k = kwargs.get("top_k", 5)

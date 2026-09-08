@@ -5,6 +5,8 @@ import sys
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
 
+from ipagraphrag.search.retrieval import util
+
 sys.path.append(os.getcwd())
 from ipagraphrag.kg_construction.extraction.llm.llm_extractor import LLMExtractor
 from ipagraphrag.search.query_expansion.query_expander import QueryExpander
@@ -102,11 +104,12 @@ def main() -> None:
     query_text = query_text.split(",")
     extractor = LLMExtractor(os.getenv('BASE_URL'),os.getenv('API_KEY'), LLM_MODEL)
     searched_label_index = {"mention": "mention_vector", "Concept": "concept_vector"}
-    results = retriever.retrieve_subgraphs(query_text, patient_name=PATIENT_NAME,
+    embedder = util.get_embedding_model(EMBEDDING_PROVIDER)
+    results = retriever.retrieve_subgraphs(query_text, data_source=PATIENT_NAME,
                                            searched_label_index=searched_label_index,
                                            embedding_property=EMBEDDING_PROPERTY, top_k=TOP_K, hops=2,
                                            concept_label=CONCEPT_LABEL,
-                                           threshold=SIMILARITY_THRESHOLD, provider=EMBEDDING_PROVIDER,
+                                           threshold=SIMILARITY_THRESHOLD, embedder=embedder,
                                           extractor=extractor)
     generator = JSONContextGenerator()
     context_list = generator.generate_context(results, {'text', 'name', 'definition', 'key', 'FSN', 'term'}, {'key'})

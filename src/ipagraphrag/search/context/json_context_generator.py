@@ -1,3 +1,4 @@
+import networkx as nx
 from networkx import Graph
 
 from ipagraphrag.search.context.context_generator import ContextGenerator

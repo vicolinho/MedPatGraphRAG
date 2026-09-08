@@ -7,6 +7,8 @@ from os.path import isfile, join
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
 
+from search.retrieval import util
+
 sys.path.append(os.getcwd())
 from ipagraphrag.kg_construction.extraction.llm.llm_extractor import LLMExtractor
 from ipagraphrag.search.query_expansion.query_expander import QueryExpander
@@ -85,6 +87,7 @@ def main() -> None:
     EVALUATION_QUERY_PATH = os.getenv("eval_query_path", "data/graSSCo/evaluation")
     query_files = [f for f in os.listdir(EVALUATION_QUERY_PATH) if isfile(join(EVALUATION_QUERY_PATH, f))]
     # Accept query from CLI argument or interactive prompt
+    embedder = util.get_embedding_model(EMBEDDING_PROVIDER)
     for file_name in query_files:
         with open(join(EVALUATION_QUERY_PATH, file_name)) as f:
             patient = file_name.split("_")[0]
@@ -94,7 +97,7 @@ def main() -> None:
                 extractor = LLMExtractor(os.getenv('BASE_URL'),os.getenv('API_KEY'), LLM_MODEL)
                 results = retriever.retrieve_subgraphs(query_text, index_name=VECTOR_INDEX_NAME,
                                         node_label=NODE_LABEL, patient_name=patient, embedding_property=EMBEDDING_PROPERTY, top_k=TOP_K, hops=1,
-                                                       threshold=SIMILARITY_THRESHOLD, provider=EMBEDDING_PROVIDER,
+                                                       threshold=SIMILARITY_THRESHOLD, embedder=embedder,
                                                       extractor=extractor)
                 generator = JSONContextGenerator()
                 context_list = generator.generate_context(results, {'text', 'name', 'definition', 'key'}, {'key'})

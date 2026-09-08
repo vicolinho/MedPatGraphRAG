@@ -15,7 +15,7 @@ from ipagraphrag.kg_construction.extraction.llm.neo4j_llm_extractor import name_
 
 logger = logging.getLogger(__name__)
 
-class MultiHopNodeRetriever(Retriever):
+class SpanningTreeRetriever(Retriever):
 
     def __init__(self, neo4j_driver):
         super().__init__(neo4j_driver)
@@ -42,29 +42,6 @@ class MultiHopNodeRetriever(Retriever):
             logger.debug("node id {} label {}".format(n["node"]["id"], n["node"]["labels"]))
             logger.debug(n["score"])
             with self.neo4j_driver.session() as session:
-                # query = f'''
-                #     MATCH p = (start) - [x] - {{1,{hops} }}(end)
-                #     WHERE
-                #     NONE(i IN range(0, size(nodes(p)) - 2)
-                #         WHERE
-                #         '{concept_label}'
-                #         IN
-                #         labels(nodes(p)[i])
-                #         AND
-                #         '{concept_label}'
-                #         IN
-                #         labels(nodes(p)[i + 1]))
-                #     AND
-                #     NONE(i IN range(0, size(nodes(p))-1)
-                #         WHERE
-                #         ('mention' IN labels(nodes(p)[i]) AND nodes(p)[i]['source']<>'{patient_name}')
-                #         OR
-                #         ('chunk' IN labels(nodes(p)[i]) AND nodes(p)[i]['source']<>'{patient_name}')
-                #         )
-                #     AND
-                #     elementId(start) = '{n['node']['id']}'
-                #     RETURN
-                #     p'''
                 query = f'''
                     MATCH p = (start) - [x] - {{1,{hops} }}(end)
                     WHERE
@@ -121,9 +98,8 @@ class MultiHopNodeRetriever(Retriever):
         for m in mentions:
             result.extend(self.vector_search(m.term, data_source, searched_label_index, embedding_property, top_k, threshold, embedder))
         graph_result_list = []
-        #print(result)
         for n in result:
-            logger.info("node id {} label {}".format(n["node"]["id"], n["node"]["labels"]))
+            logger.debug("node id {} label {}".format(n["node"]["id"], n["node"]["labels"]))
             logger.debug(n["score"])
             with self.neo4j_driver.session() as session:
                 # query = f'''

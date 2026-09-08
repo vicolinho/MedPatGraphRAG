@@ -16,21 +16,60 @@ Usage:
   python -m medgraphrag.phase4_qa.eval_qa --n 1000 --no-graph
   python -m medgraphrag.phase4_qa.eval_qa --n 1000 --textrag
 """
-import os, sys, json, re
+import argparse
+import asyncio
+import json
+import logging
+import os
+import re
+import sys
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
+
+
+from dotenv import load_dotenv
+from neo4j import GraphDatabase
 from openai import OpenAI
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import linear_kernel
-from ipagraphrag.common.llm_config import MODEL, TEMPERATURE, connection_kwargs
-from ipagraphrag.common.sampling import sample_pmids
+from tqdm import tqdm
+
 import prompts
 from config import (
-    MAX_FACTS, WORKERS, MAX_QUOTES_PER_FACT, MIN_QUOTE_WORDS, QUOTE_SIM_TOPK,
-    SELECT_SIM_FIRST, SIM_USE_QUOTES, TEXTRAG_K, TEXTRAG_CORPUS,
-    QUESTION_FILE, DEFAULT_N,
+    WORKERS, MAX_QUOTES_PER_FACT, MIN_QUOTE_WORDS, SIM_USE_QUOTES, TEXTRAG_K, TEXTRAG_CORPUS,
+    QUESTION_FILE, )
+from ipagraphrag.common.llm_config import MODEL, TEMPERATURE, connection_kwargs
+from ipagraphrag.common.sampling import sample_pmids
+from ipagraphrag.kg_construction.extraction.llm import neo4j_llm_extractor
+from ipagraphrag.search.context.json_context_generator import JSONContextGenerator
+from ipagraphrag.search.retrieval.multi_hop_retriever import MultiHopNodeRetriever
+from ipagraphrag.search.retrieval import util
+from ipagraphrag.search.context.fact_context_generator import FactContextGenerator
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
 )
-from medgraphrag.phase4_qa import retrieve   # loads the graph + scispacy linker on import
+logger = logging.getLogger(__name__)
+
+load_dotenv()
+
+parser = argparse.ArgumentParser(description='rl generation')
+
+parser.add_argument('--vector_index', '-vi', type=str, default='mention_vector', help='vector index name')
+parser.add_argument('--node_label', '-nl', type=str, default='mention',
+                    help='nodel label for querying')
+parser.add_argument('--embedding_property', '-ep', type=str, default='embedding',
+                    help='embedding property')
+parser.add_argument('--sim_threshold', '-t', type=float, default=0.5,
+                    help='similarity threshold for node embedding and query mention embedding')
+parser.add_argument('--top_k', '-top_k', type=int, default=2,
+                    help='top k for query mention and node embedding similarity ranking')
+parser.add_argument('--concept_label', '-cl', type=str, default='Concept',
+                    help='patient to analyse')
+parser.add_argument('--n', '-n', type=int, default=-1,
+                    help='number of dcouments')
+args = parser.parse_args()
 
 client = OpenAI(**connection_kwargs())
 
@@ -43,19 +82,35 @@ else:
 USE_QUOTES = "--quotes" in sys.argv
 
 SYS = prompts.system_prompt(MODE)
+LLM_MODEL = os.getenv("LLM_MODEL", None)
+if LLM_MODEL is None:
+    print("LLM model is not specified")
+    exit(1)
 
-
-def _argval(flag, default):
-    return sys.argv[sys.argv.index(flag) + 1] if flag in sys.argv else default
-
-
-N = int(_argval("--n", str(DEFAULT_N)))
+N = args.n
 QFILE = QUESTION_FILE
 data = json.load(open(QFILE, encoding="utf-8"))
 # Same sample as phase 1's --n, so in the pqal config the graph was built from
 # exactly the abstracts these questions come from.
 pmids = sample_pmids(data, N)
+NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+NEO4J_USER = os.getenv("NEO4J_USERNAME", "neo4j")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "password")
 
+EMBEDDING_PROPERTY = args.embedding_property
+
+# Search parameters
+TOP_K = args.top_k  # number of results
+SIMILARITY_THRESHOLD = args.sim_threshold
+CONCEPT_LABEL = args.concept_label
+
+EMBEDDING_PROVIDER = os.getenv("provider", "huggingface")
+LLM_MODEL = os.getenv("LLM_MODEL", None)
+
+driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
+retriever = MultiHopNodeRetriever(driver)
+extractor = neo4j_llm_extractor.build_extractor()
+embedder = util.get_embedding_model(EMBEDDING_PROVIDER)
 if MODE == "textrag":
     # Default retrieval pool is the same n questions being evaluated (original
     # behavior, unchanged). TEXTRAG_CORPUS lets the pool be a superset (e.g. the
@@ -105,54 +160,26 @@ def _fact_sim_text(G, u, v, rel):
     return (base + " " + " ".join(sorted(finding))) if finding else base
 
 
-def facts_for(q):
+async def facts_for(q, pmid):
     """Selects the facts shown to the reader, in two stages with different keys.
     Selection: candidates are ranked (IS_A last, anchor tier, question-similarity)
     and cut at MAX_FACTS -- similarity discriminates relevance to THIS question,
     which corpus-wide weight cannot once an anchor has more edges than fit the
     window. Presentation: the survivors are re-sorted by weight."""
-    G = retrieve.G
-    _, anchors, _, _, triples = retrieve.retrieve(q)
-    anchor_keys = {key for _, key in anchors}
 
-    def _anchor_tier(u, v):
-        return 2 - ((u in anchor_keys) + (v in anchor_keys))
+    searched_label_index = {"mention": "mention_vector", "Concept": "concept_vector"}
+    results = await retriever.retrieve_subgraphs_with_neo4j_extractor(q, data_source=pmid,
+                                           searched_label_index=searched_label_index,
+                                           embedding_property=EMBEDDING_PROPERTY, top_k=TOP_K, hops=2,
+                                           concept_label=CONCEPT_LABEL,
+                                           threshold=SIMILARITY_THRESHOLD, embedder=embedder,
+                                           extractor=extractor)
+    basic_context = retriever.get_basic_context(pmid)
 
-    if triples:
-        fact_texts = [_fact_sim_text(G, u, v, rel) for u, v, rel, w, src, ev in triples]
-        # Fit locally per question (question + its own candidates only): pools
-        # are small (dozens-hundreds), a corpus-wide vectorizer isn't needed.
-        vec = TfidfVectorizer(stop_words="english")
-        M = vec.fit_transform([q] + fact_texts)
-        sims = linear_kernel(M[0:1], M[1:]).ravel()
-    else:
-        sims = []
-
-    def _sel_key(pair):
-        isa, tier, sim = pair[0][2] == "IS_A", _anchor_tier(pair[0][0], pair[0][1]), -pair[1]
-        return (isa, sim, tier) if SELECT_SIM_FIRST else (isa, tier, sim)
-
-    ranked = sorted(zip(triples, sims), key=_sel_key)
-    top = ranked[:MAX_FACTS]   # (triple, similarity) pairs
-
-    # Quote gate: with QUOTE_SIM_TOPK>0, only the K facts most similar to the
-    # question keep their source sentence; the rest still show as bare triples.
-    if USE_QUOTES and QUOTE_SIM_TOPK and len(top) > QUOTE_SIM_TOPK:
-        sim_cut = sorted((s for _, s in top), reverse=True)[QUOTE_SIM_TOPK - 1]
-    else:
-        sim_cut = float("-inf")
-
-    # Re-sort the survivors for presentation: IS_A last, then weight (= number
-    # of supporting abstracts) first. Similarity decides only which facts make
-    # the MAX_FACTS cut; the reader sees them ordered by corroboration.
-    top = sorted(top, key=lambda pair: (pair[0][2] == "IS_A", -pair[0][3]))
-
-    lines = [
-        f"{G.nodes[u]['label']} --{rel}--> {G.nodes[v]['label']} (support: {w})"
-        + (_sentence_line(G, u, v, rel) if USE_QUOTES and sim >= sim_cut else "")
-        for (u, v, rel, w, src, ev), sim in top
-    ]
-    return lines
+    #generator = JSONContextGenerator()
+    generator = FactContextGenerator()
+    context_list = generator.generate_context(results, {'text', 'name', 'definition', 'FSN', 'term'}, {'key'})
+    return context_list[0], basic_context
 
 
 def parse(ans):
@@ -164,18 +191,17 @@ def parse(ans):
     return m[0] if m else "?"
 
 
-def build_prompt(q, p):
+async def build_prompt(q, pmid):
     """Builds context + prompt. In graph mode, uses retrieve/scispacy ->
     called SEQUENTIALLY (scispacy is not thread-safe)."""
     user = f"Question: {q}\n"
     nf = 0
-
     if MODE == "graph":
-        lines = facts_for(q)
-        nf = len(lines)
+        lines, basic_context = await facts_for(q, pmid)
         if lines:  # no facts -> no graph block at all, model answers from priors
-            user += "\nKnowledge graph facts:\n" + "\n".join(lines) + "\n"
-
+            nf = len(lines)
+            user += "\nKnowledge graph facts:\n" + "\n" + str(lines) + "\n"
+            user += "\n Basic context:\n" + "\n" + str(basic_context) +"\n"
     elif MODE == "textrag":
         qv = _vec.transform([q])
         sims = linear_kernel(qv, _M).ravel()
@@ -201,16 +227,31 @@ correct, rows, conf = 0, [], Counter()
 print(f"Mode: {MODE}{' +quotes' if USE_QUOTES else ''}  (workers={WORKERS})  qfile={QFILE}\n")
 
 print(f"Building prompts ({len(pmids)}, sequential"
-      f"{' incl. retrieval/UMLS index load' if MODE == 'graph' else ''}) ...", flush=True)
+      f"{' incl. retrieval/SNOMED index load' if MODE == 'graph' else ''}) ...", flush=True)
 items = []  # (p, gold, nf, user)
-for _i, p in enumerate(pmids, 1):
-    q = data[p]["QUESTION"]
-    gold = data[p]["final_decision"].strip().lower()
-    user, nf = build_prompt(q, p)
-    items.append((p, gold, nf, user))
-    if _i % 25 == 0 or _i == len(pmids):
-        print(f"  prompt {_i}/{len(pmids)} built", flush=True)
 
+async def run_all():
+    todo = []
+    for _i, p in tqdm(enumerate(pmids, 1)):
+        q = data[p]["QUESTION"]
+        todo.append((q, p))
+    counter = {"n": 0}
+    total = len(todo)
+    sem = asyncio.Semaphore(WORKERS)
+    lock = asyncio.Lock()
+    async def worker(query, p):
+        async with sem:
+            user, nf = await build_prompt(query, p)
+            gold = data[p]["final_decision"].strip().lower()
+        async with lock:
+            items.append((p, gold, nf, user))
+            counter["n"] += 1
+            print(f"  [{counter['n']}/{total}] {p}", flush=True)
+    await asyncio.gather(*(worker(query, p) for query, p in todo))
+
+asyncio.run(run_all())
+
+print("number of item: {}".format(len(items)))
 
 def _run(item):
     p, gold, nf, user = item
@@ -221,8 +262,8 @@ def _run(item):
         return (p, gold, nf, None, None, str(e)[:80])
 
 
-print(f"LLM calls (parallel, workers={WORKERS}) ...\n", flush=True)
-with ThreadPoolExecutor(max_workers=WORKERS) as ex:
+print(f"LLM calls (parallel, workers={2}) ...\n", flush=True)
+with ThreadPoolExecutor(max_workers=1) as ex:
     for i, (p, gold, nf, pred, resp, err) in enumerate(ex.map(_run, items), 1):
         if err:
             print(f"  [{i}/{len(pmids)}] {p} -- ERROR: {err}")
