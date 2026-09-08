@@ -10,11 +10,11 @@ def create_chunk_node_queries(c: Chunk) -> list[str]:
     for m in c.mentions:
         label = "mention"
         properties = "text: '{}', type: '{}'".format(m.term, m.type)
-        mention_query = f"MERGE (n:{label} {{mention_id: '{m.data_source+'-'+str(m.pos)}', source: '{c.data_source}', {properties}}})"
+        mention_query = f"MERGE (n:{label} {{id: '{m.data_source+'-'+str(m.pos)}', source: '{c.data_source}', {properties}}})"
         queries.append(mention_query)
         label = "has_mention"
         edge_query = (f"MATCH (a {{chunk_pos: {c.pos}, source:'{c.data_source}'}}), "
-                      f"(b {{mention_id: '{m.data_source+'-'+str(m.pos)}'}})"
+                      f"(b {{id: '{m.data_source+'-'+str(m.pos)}'}})"
                       f"MERGE (a)-[r:{label}]->(b)")
         queries.append(edge_query)
     return queries
